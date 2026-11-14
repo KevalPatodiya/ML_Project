@@ -4,31 +4,31 @@ This project estimates the advertised asking price of UK used cars in pounds. [d
 
 ## Decision Tree experiments
 
-The original notebook used `used_cars_cleaned_07.csv` and an 80/20 random training–validation split. Numeric inputs were imputed, categorical inputs were one-hot encoded, and the tree was evaluated on exact asking prices and on three price bands: under £10,000, £10,000 to under £25,000, and £25,000 or more.
+The original notebook used `used_cars_cleaned_08.csv` and an 80/20 random training–validation split (72,318 validation listings). Numeric inputs were imputed, categorical inputs were one-hot encoded, and the tree was evaluated on exact asking prices and on three price bands: under £10,000, £10,000 to under £25,000, and £25,000 or more.
 
 | Experiment | Depth | Minimum leaf size | CV MAE | Validation MAE | Within 10% | Band accuracy |
 |---|---:|---:|---:|---:|---:|---:|
-| Basic tree | 15 | 10 | £2,992.36 | £3,000.68 | 47.608% | 88.826% |
-| Initial tuning | 20 | 5 | £2,559.38 | £2,485.55 | 56.349% | 90.612% |
-| Coarse-to-fine, one-hot version | 28 | 3 | £2,365.59 | £2,267.53 | 61.681% | 91.797% |
-| Same tuned tree, CountVectorizer version | 28 | 3 | — | £2,278.31 | 62.114% | 91.899% |
+| Basic tree | 15 | 10 | £2,885.74 | £2,795.99 | 49.003% | 89.326% |
+| Initial tuning | 20 | 5 | £2,467.08 | £2,262.02 | 57.301% | 91.246% |
+| Coarse-to-fine, one-hot version | 25 | 2 | £2,292.98 | £2,144.36 | 61.054% | 91.902% |
+| Same tuned tree, CountVectorizer version | 25 | 2 | — | £2,092.77 | 61.537% | 91.970% |
 
-- **Initial search.** A six-combination grid compared depths 10, 15 and 20 with leaf sizes 5 and 10 using three-fold CV. A separate sequential search proposed five hyperparameters and required at least a £5 CV MAE improvement to continue. Increasing `min_samples_split` to 30 worsened CV MAE by £68.91, so the search stopped. The proposed `max_leaf_nodes` and `max_features` changes were skipped.
-- **Coarse-to-fine search.** Depths 26 and 28 lowered CV MAE to £2,432.54 and £2,426.29. Reducing the leaf size to 3 brought it to £2,365.59.
-- **Version encoding.** CountVectorizer used unigrams and bigrams from the trim description. It gained 0.433 percentage points within 10% but increased MAE by £10.78. One-hot encoding remained the tree baseline.
-- **Fit diagnosis.** The tuned one-hot tree had £1,218.20 training MAE and £2,267.53 validation MAE. Its within-10% rate fell from 76.893% to 61.681%. The gap indicates overfitting. Validation RMSE reached £39,046.99, and the validation set included a £9,999,999 listing above the tree's £5 million training maximum.
+- **Initial search.** A six-combination grid compared depths 10, 15 and 20 with leaf sizes 5 and 10 using three-fold CV. A separate sequential search proposed five hyperparameters and required at least a £5 CV MAE improvement to continue. Depth 20 improved CV MAE by £317.59 and leaf size 5 by a further £101.07. Increasing `min_samples_split` to 30 worsened CV MAE by £99.27, so the search stopped. The proposed `max_leaf_nodes` and `max_features` changes were skipped.
+- **Coarse-to-fine search.** Depth 30 with leaf size 5 lowered CV MAE to £2,348.13. Depth 25 with leaf size 2 lowered it further to £2,292.98. The third coarse trial (unrestricted depth, leaf size 10) worsened CV MAE by £178.32, so the search stopped before the fine trials (depth 24/leaf 4, 26/3 and 28/3) were evaluated.
+- **Version encoding.** CountVectorizer used unigrams and bigrams from the trim description. On this split it lowered validation MAE by £51.59 and RMSE by £852.15, raised R² from 0.651 to 0.684, and gained 0.483 percentage points within 10%. The rebuilt grouped-validation pipeline below still one-hot encodes `version`, and the CountVectorizer variant was not re-tested on the grouped split.
+- **Fit diagnosis.** The tuned one-hot tree had £1,102.73 training MAE and £2,144.36 validation MAE. Its within-10% rate fell from 76.271% to 61.054%, and R² fell from 0.965 to 0.651. Validation RMSE (£17,624.09) was about 2.8 times training RMSE (£6,185.33), while median absolute error rose from £550.00 to £952.88. The gap indicates overfitting. RMSE rose proportionally more than the median error, which suggests a small number of large errors drive it.
 
 ## Validation rebuild and leakage audit
 
-The original cleaned CSV already contained group medians and modes computed before the notebook made its training–validation split. That allowed validation and CV rows to influence imputation. The audit also found 268 original validation rows whose saved values, including price, matched a training row. Matching values alone cannot identify the same vehicle. Numeric Spearman correlations with price were strongest for registration year (+0.753), mileage (−0.677), and horsepower (+0.623).
+An earlier audit of the original cleaned CSV (`used_cars_cleaned_07.csv`) found that it already contained group medians and modes computed before the notebook made its training–validation split. That allowed validation and CV rows to influence imputation. The same audit found 268 original validation rows whose saved values, including price, matched a training row. Matching values alone cannot identify the same vehicle. Numeric Spearman correlations with price were strongest for registration year (+0.753), mileage (−0.677), and horsepower (+0.623).
 
-The revised notebook starts from `uk_used_cars_autotrader.csv`, recreates the original 20% holdout with seed 42, then splits development data by groups of identical prepared predictors. It applies fixed eligibility rules for used listings with a known registration year and fewer than eight previous owners when recorded. It normalises missing categories, masks invalid door, seat and horsepower values, converts CO₂ to grams per mile, and masks the two flagged emissions values. The pipeline learns numeric medians, door and seat modes, and categorical vocabularies from training rows. The predictor allowlist excludes both the asking price and its euro equivalent.
+The revised notebook starts from `uk_used_cars_autotrader.csv`, recreates the original 20% holdout with seed 42, then splits development data by groups of identical prepared predictors (73,695 grouped-validation listings). It applies fixed eligibility rules for used listings with a known registration year and fewer than eight previous owners when recorded. It normalises missing categories, masks invalid door, seat and horsepower values, converts CO₂ to grams per mile, and masks the two flagged emissions values. The pipeline learns numeric medians, door and seat modes, and categorical vocabularies from training rows. The predictor allowlist excludes both the asking price and its euro equivalent.
 
-The grouped split prevents exact prepared predictor matches across the development training and validation sets. The original holdout was split by row, so exact overlaps with development and relisted vehicles remain possible. The revised results use different validation rows and preprocessing from the original tree experiments.
+The grouped split prevents exact prepared predictor matches across the development training and validation sets. The original holdout was split by row, so exact overlaps with development and relisted vehicles remain possible. The revised results use different validation rows and preprocessing from the original tree experiments. The grouped-validation tree cell hard-codes depth 28 and minimum leaf size 3, which differs from the depth 25 and leaf size 2 tree selected in the coarse-to-fine search above.
 
 | Model on grouped validation | MAE | RMSE | R² | Within 10% |
 |---|---:|---:|---:|---:|
-| Tuned Decision Tree | £2,362.49 | £20,600.67 | 0.651 | 59.182% |
+| Tuned Decision Tree (depth 28, leaf 3) | £2,362.49 | £20,600.67 | 0.651 | 59.182% |
 | Log-price Ridge baseline | £1,789.08 | £17,412.04 | 0.751 | 71.822% |
 
 Ridge uses L2 regularisation with `alpha=0.1`. It learns on `log1p(price_gbp)` and converts its predictions back to pounds with `expm1`. The log transform compresses the range of asking prices during fitting.
@@ -46,7 +46,7 @@ All feature experiments reused the same grouped split. MAE in pounds was the pri
 | Add battery capacity from version text to the make–model model | £1,768.41 | Omit |
 | Remove emission class from the make–model model | **£1,764.78** | Selected |
 
-Battery capacity barely changed MAE for either electric or plug-in hybrid listings. In the ablation tests, removing `version` increased MAE by £931.02, and removing `seller_city` increased it by £20.98. Removing annual tax improved MAE by £0.23 while worsening RMSE and the within-10% rate. Removing emission class improved MAE by £3.40 while increasing RMSE by £43.30. The saved model retains annual tax, seller location, and one-hot version encoding.
+Battery capacity was extracted for 89.727% of electric and 99.032% of plug-in hybrid validation listings (10.390% of all listings), yet it barely changed MAE for either group. In the ablation tests, removing `version` increased MAE by £931.02, and removing `seller_city` increased it by £20.98. Removing annual tax improved MAE by £0.23 while worsening RMSE and the within-10% rate. Removing emission class improved MAE by £3.40 while increasing RMSE by £43.30. The saved model retains annual tax, seller location, and one-hot version encoding.
 
 The selected model achieved **£1,764.78 MAE**, **£17,201.32 RMSE**, **0.757 R²**, **71.864% within 10%**, and **94.133% price-band accuracy** on grouped validation. The small emission-class gain was observed on one validation split.
 
@@ -77,7 +77,7 @@ The notebook displays the first 15 actual and predicted prices with their signed
 
 ## Reproduce the notebook
 
-1. Put `decision_tree.ipynb`, `uk_used_cars_autotrader.csv`, and `test.csv` in the same working folder. Add `used_cars_cleaned_07.csv` to rerun the historical tree cells.
+1. Put `decision_tree.ipynb`, `uk_used_cars_autotrader.csv`, and `test.csv` in the same working folder. Add `used_cars_cleaned_08.csv` to rerun the historical tree cells.
 2. Use a Jupyter environment with NumPy, pandas, scikit-learn, and joblib. The verified export used scikit-learn 1.5.2 and joblib 1.4.2.
 3. Run the notebook from the cell that loads `uk_used_cars_autotrader.csv` through the feature experiments and model export to reproduce the selected model.
 4. Run the test sample cells to reload the export, call `prepare_listings()`, add `log_mileage` and `make_model`, and compute metrics. To evaluate all eligible holdout listings, use the full prepared test set in place of the sample.
