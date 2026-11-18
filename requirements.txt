@@ -1,5 +1,9 @@
-streamlit
-joblib
-numpy
-pandas
-scikit-learn
+# The model file was saved with scikit-learn 1.5.2 (Python 3.10), so these versions are pinned
+# to match. Use Python 3.10, 3.11 or 3.12 - scikit-learn 1.5.2 has no wheels for 3.13.
+streamlit>=1.40,<1.50
+plotly>=5.20,<6
+joblib>=1.4
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+scipy>=1.11,<1.14
